@@ -1,4 +1,6 @@
-﻿using System.Windows.Media;
+﻿using System.Collections.Generic;
+using System.Windows;
+using System.Windows.Media;
 
 namespace VectorEditor
 {
@@ -10,5 +12,9 @@ namespace VectorEditor
         public double Height { get; set; } = 60;
         public Brush Fill { get; set; } = Brushes.LightGray;
         public Brush Stroke { get; set; } = Brushes.Black;
+        public ShapeType Type { get; set; } = ShapeType.Rectangle;
+
+        // [ИЗМЕНЕНО] PointCollection удобнее и привязывается к Polygon.Points
+        public PointCollection Points { get; set; } = new PointCollection();
     }
 }

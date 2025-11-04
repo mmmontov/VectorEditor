@@ -1,52 +1,39 @@
 ﻿<Window x:Class="VectorEditor.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:local="clr-namespace:VectorEditor"
         Title="VectorEditor" Height="600" Width="900">
-
     <Window.DataContext>
-        <local:MainViewModel/>
+        <local:MainViewModel xmlns:local="clr-namespace:VectorEditor"/>
     </Window.DataContext>
 
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="200"/>
+            <ColumnDefinition Width="220"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <!-- Левая панель -->
         <Border Grid.Column="0" Background="#F5F6F7" Margin="8" CornerRadius="4">
             <StackPanel Margin="10">
-
                 <TextBlock Text="Инструменты" FontWeight="Bold" Margin="0,0,0,10"/>
-
-                <Button Content="Добавить прямоугольник"
-                        Command="{Binding StartDrawingRectangleCommand}" Margin="0,0,0,6"/>
-
-                <Button Content="Переместить фигуру"
-                        Command="{Binding StartMovingCommand}" Margin="0,0,0,6"/>
-
-                <Button Content="Очистить холст"
-                        Command="{Binding ClearCommand}" Margin="0,0,0,10"/>
-
-                <!-- [НОВОЕ] Undo/Redo -->
-                <TextBlock Text="История действий" FontWeight="Bold" Margin="0,10,0,10"/>
+                <Button Content="Прямоугольник" Command="{Binding StartRectangleCommand}" Margin="0,0,0,6"/>
+                <Button Content="Эллипс" Command="{Binding StartEllipseCommand}" Margin="0,0,0,6"/>
+                <Button Content="Линия" Command="{Binding StartLineCommand}" Margin="0,0,0,6"/>
+                <Button Content="Многоугольник" Command="{Binding StartPolygonCommand}" Margin="0,0,0,6"/>
+                <Separator Margin="0,10,0,10"/>
+                <Button Content="Переместить фигуру" Command="{Binding StartMovingCommand}" Margin="0,0,0,6"/>
+                <Button Content="Очистить холст" Command="{Binding ClearCommand}" Margin="0,0,0,6"/>
                 <Button Content="Отменить" Command="{Binding UndoCommand}" Margin="0,0,0,6"/>
-                <Button Content="Вернуть" Command="{Binding RedoCommand}" Margin="0,0,0,6"/>
-
+                <Button Content="Повторить" Command="{Binding RedoCommand}" Margin="0,0,0,6"/>
             </StackPanel>
         </Border>
 
-        <!-- Холст -->
         <Border Grid.Column="1" Background="White" Margin="10" BorderBrush="#E0E0E0" BorderThickness="1">
             <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-                <Canvas x:Name="DrawingCanvas"
-                        Background="Transparent"
-                        Width="1200"
-                        Height="900"
+                <Canvas x:Name="DrawingCanvas" Background="Transparent" Width="1200" Height="900"
                         MouseLeftButtonDown="Canvas_MouseLeftButtonDown"
                         MouseMove="Canvas_MouseMove"
-                        MouseLeftButtonUp="Canvas_MouseLeftButtonUp">
+                        MouseLeftButtonUp="Canvas_MouseLeftButtonUp"
+                        MouseRightButtonDown="Canvas_MouseRightButtonDown">
                     <ItemsControl ItemsSource="{Binding Shapes}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -63,11 +50,55 @@
 
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Rectangle Width="{Binding Width}"
-                                           Height="{Binding Height}"
-                                           Fill="{Binding Fill}"
-                                           Stroke="{Binding Stroke}"
-                                           StrokeThickness="2"/>
+                                <!-- Bind Content to the item so ContentTemplate is used -->
+                                <ContentControl Content="{Binding}">
+                                    <ContentControl.Style>
+                                        <Style TargetType="ContentControl">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Type}" Value="Rectangle">
+                                                    <Setter Property="ContentTemplate">
+                                                        <Setter.Value>
+                                                            <DataTemplate>
+                                                                <Rectangle Width="{Binding Width}" Height="{Binding Height}" Fill="{Binding Fill}" Stroke="{Binding Stroke}" StrokeThickness="2"/>
+                                                            </DataTemplate>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Type}" Value="Ellipse">
+                                                    <Setter Property="ContentTemplate">
+                                                        <Setter.Value>
+                                                            <DataTemplate>
+                                                                <Ellipse Width="{Binding Width}" Height="{Binding Height}" Fill="{Binding Fill}" Stroke="{Binding Stroke}" StrokeThickness="2"/>
+                                                            </DataTemplate>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Type}" Value="Line">
+                                                    <Setter Property="ContentTemplate">
+                                                        <Setter.Value>
+                                                            <DataTemplate>
+                                                                <Line X1="0" Y1="0"
+                                                                      X2="{Binding EndX}"
+                                                                      Y2="{Binding EndY}"
+                                                                      Stroke="{Binding Stroke}"
+                                                                      StrokeThickness="2"/>
+                                                            </DataTemplate>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Type}" Value="Polygon">
+                                                    <Setter Property="ContentTemplate">
+                                                        <Setter.Value>
+                                                            <DataTemplate>
+                                                                <Polygon Points="{Binding Points}" Fill="{Binding Fill}" Stroke="{Binding Stroke}" StrokeThickness="2"/>
+                                                            </DataTemplate>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ContentControl.Style>
+                                </ContentControl>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
