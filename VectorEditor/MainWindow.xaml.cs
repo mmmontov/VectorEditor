@@ -1,9 +1,12 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.IO;
+using Microsoft.Win32;
 
 namespace VectorEditor
 {
@@ -16,16 +19,274 @@ namespace VectorEditor
         private List<Point> _polygonPoints = new List<Point>();
         private Polyline _previewPolyline = null;
 
+        // last saved path
+        private string _lastSavedPath;
+
         public MainWindow()
         {
             InitializeComponent();
+            this.PreviewMouseWheel += Window_PreviewMouseWheel;
         }
 
         private MainViewModel ViewModel => DataContext as MainViewModel;
 
+        private void OpenButton_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new OpenFileDialog
+            {
+                Filter = "VectorEditor files (*.vec)|*.vec|All files (*.*)|*.*",
+                DefaultExt = ".vec"
+            };
+
+            if (dlg.ShowDialog() == true)
+            {
+                try
+                {
+                    LoadFromFile(dlg.FileName);
+                    _lastSavedPath = dlg.FileName;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Ошибка загрузки файла: " + ex.Message, "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
+        private void LoadFromFile(string path)
+        {
+            var vm = ViewModel;
+            if (vm == null) throw new InvalidOperationException("ViewModel не инициализирован");
+
+            var lines = File.ReadAllLines(path);
+            if (lines.Length == 0 || lines[0] != "VEC1") throw new InvalidDataException("Файл не является VEC форматом или повреждён.");
+
+            vm.Shapes.Clear();
+
+            int i = 1;
+            // read header lines until shapes
+            double zoom = 1.0;
+            int count = 0;
+            for (; i < lines.Length; i++)
+            {
+                var l = lines[i];
+                if (string.IsNullOrWhiteSpace(l)) continue;
+                if (l.StartsWith("Zoom:"))
+                {
+                    double.TryParse(l.Substring(5), out zoom);
+                    continue;
+                }
+                if (l.StartsWith("Count:"))
+                {
+                    int.TryParse(l.Substring(6), out count);
+                    continue;
+                }
+                if (l == "BEGIN_SHAPE") break;
+            }
+
+            vm.Zoom = zoom;
+
+            while (i < lines.Length)
+            {
+                var l = lines[i++].Trim();
+                if (l != "BEGIN_SHAPE") break;
+
+                var dict = new Dictionary<string, string>();
+                while (i < lines.Length)
+                {
+                    var line = lines[i++];
+                    if (line == "END_SHAPE") break;
+                    var idx = line.IndexOf(':');
+                    if (idx <= 0) continue;
+                    var key = line.Substring(0, idx);
+                    var val = line.Substring(idx + 1);
+                    dict[key] = val;
+                }
+
+                // Create shape from dict
+                ShapeType type = ShapeType.None;
+                if (dict.ContainsKey("Type")) Enum.TryParse(dict["Type"], out type);
+
+                double x = GetDouble(dict, "X");
+                double y = GetDouble(dict, "Y");
+                double width = GetDouble(dict, "Width");
+                double height = GetDouble(dict, "Height");
+                Brush fill = BrushFromString(GetString(dict, "Fill")) ?? Brushes.Transparent;
+                Brush stroke = BrushFromString(GetString(dict, "Stroke")) ?? Brushes.Black;
+
+                var model = new ShapeModel
+                {
+                    X = x,
+                    Y = y,
+                    Width = width,
+                    Height = height,
+                    Fill = fill,
+                    Stroke = stroke,
+                    Type = type
+                };
+
+                if (type == ShapeType.Polygon && dict.ContainsKey("Points"))
+                {
+                    var pts = dict["Points"].Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+                    var coll = new PointCollection();
+                    foreach (var p in pts)
+                    {
+                        var parts = p.Split(',');
+                        if (parts.Length == 2)
+                        {
+                            if (double.TryParse(parts[0], out double px) && double.TryParse(parts[1], out double py))
+                            {
+                                coll.Add(new Point(px, py));
+                            }
+                        }
+                    }
+                    model.Points = coll;
+                }
+
+                if (type == ShapeType.Line)
+                {
+                    model.Width = GetDouble(dict, "EndX");
+                    model.Height = GetDouble(dict, "EndY");
+                }
+
+                vm.Shapes.Add(new ShapeViewModel(model));
+            }
+        }
+
+        private static string GetString(Dictionary<string,string> d, string key)
+        {
+            return d.ContainsKey(key) ? d[key] : null;
+        }
+
+        private static double GetDouble(Dictionary<string,string> d, string key)
+        {
+            if (!d.ContainsKey(key)) return 0.0;
+            double.TryParse(d[key], out double v);
+            return v;
+        }
+
+        private Brush BrushFromString(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return null;
+            try
+            {
+                var c = (Color)ColorConverter.ConvertFromString(s);
+                return new SolidColorBrush(c);
+            }
+            catch { return null; }
+        }
+
+        private void SaveButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(_lastSavedPath))
+            {
+                SaveAsButton_Click(sender, e);
+                return;
+            }
+
+            try
+            {
+                SaveToFile(_lastSavedPath);
+                MessageBox.Show("Файл сохранён: " + _lastSavedPath, "Сохранение", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Ошибка сохранения файла: " + ex.Message, "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void SaveAsButton_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new SaveFileDialog
+            {
+                Filter = "VectorEditor files (*.vec)|*.vec|All files (*.*)|*.*",
+                DefaultExt = ".vec",
+                AddExtension = true
+            };
+
+            if (dlg.ShowDialog() == true)
+            {
+                _lastSavedPath = dlg.FileName;
+                try
+                {
+                    SaveToFile(_lastSavedPath);
+                    MessageBox.Show("Файл сохранён: " + _lastSavedPath, "Сохранение", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Ошибка сохранения файла: " + ex.Message, "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
+        private void SaveToFile(string path)
+        {
+            var vm = ViewModel;
+            if (vm == null) throw new InvalidOperationException("ViewModel не инициализирован");
+
+            using (var sw = new StreamWriter(path, false, System.Text.Encoding.UTF8))
+            {
+                // header
+                sw.WriteLine("VEC1");
+                sw.WriteLine($"Zoom:{vm.Zoom}");
+                sw.WriteLine($"Count:{vm.Shapes.Count}");
+
+                foreach (var s in vm.Shapes)
+                {
+                    sw.WriteLine("BEGIN_SHAPE");
+                    sw.WriteLine($"Type:{s.Type}");
+                    sw.WriteLine($"X:{s.X}");
+                    sw.WriteLine($"Y:{s.Y}");
+                    sw.WriteLine($"Width:{s.Width}");
+                    sw.WriteLine($"Height:{s.Height}");
+                    sw.WriteLine($"Fill:{BrushToString(s.Fill)}");
+                    sw.WriteLine($"Stroke:{BrushToString(s.Stroke)}");
+
+                    if (s.Type == ShapeType.Polygon && s.Points != null && s.Points.Count > 0)
+                    {
+                        var pts = string.Join(";", s.Points.Select(p => $"{p.X},{p.Y}"));
+                        sw.WriteLine($"Points:{pts}");
+                    }
+
+                    // For lines store end relative point too
+                    if (s.Type == ShapeType.Line)
+                    {
+                        sw.WriteLine($"EndX:{s.EndX}");
+                        sw.WriteLine($"EndY:{s.EndY}");
+                    }
+
+                    sw.WriteLine("END_SHAPE");
+                }
+            }
+        }
+
+        private string BrushToString(Brush brush)
+        {
+            if (brush is SolidColorBrush scb)
+            {
+                // Color.ToString returns #AARRGGBB
+                return scb.Color.ToString();
+            }
+            return "#00000000"; // transparent fallback
+        }
+
         private void Canvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             var pos = e.GetPosition(DrawingCanvas);
+
+            // If user clicked a shape while not in drawing mode, select it
+            if (e.OriginalSource is Shape clickedShape && clickedShape.DataContext is ShapeViewModel clickedVm)
+            {
+                if (!ViewModel.IsMovingMode && ViewModel.CurrentTool == ShapeType.None)
+                {
+                    ViewModel.SelectedShape = clickedVm;
+                    return;
+                }
+            }
+            else
+            {
+                // clicked empty canvas -> clear selection
+                ViewModel.SelectedShape = null;
+            }
 
             // moving
             if (ViewModel.IsMovingMode)
@@ -33,6 +294,7 @@ namespace VectorEditor
                 if (e.OriginalSource is Shape shape && shape.DataContext is ShapeViewModel vm)
                 {
                     _selectedShape = vm;
+                    ViewModel.SelectedShape = vm; // keep VM selection in sync
                     _dragOffset = new Point(pos.X - vm.X, pos.Y - vm.Y);
                     DrawingCanvas.CaptureMouse();
                 }
@@ -46,19 +308,22 @@ namespace VectorEditor
                 case ShapeType.Ellipse:
                 case ShapeType.Line:
                     _startPoint = pos;
+
+                    // determine chosen brushes from ViewModel (fallbacks)
+                    var fillBrush = ViewModel?.SelectedColor?.Brush ?? Brushes.LightBlue;
+                    var strokeBrush = ViewModel?.SelectedStrokeColor?.Brush ?? Brushes.Black;
+
                     var model = new ShapeModel
                     {
                         X = pos.X,
                         Y = pos.Y,
                         Width = 0,
                         Height = 0,
-                        Fill = Brushes.LightBlue,
-                        Stroke = Brushes.Black,
+                        Fill = fillBrush,
+                        Stroke = strokeBrush,
                         Type = ViewModel.CurrentTool
                     };
                     _currentShape = new ShapeViewModel(model);
-                    // Add VM directly — do NOT call VM.AddShape (it used to clone); VM.AddShape now also just adds,
-                    // but keeping direct add here avoids confusion.
                     ViewModel.Shapes.Add(_currentShape);
                     DrawingCanvas.CaptureMouse();
                     break;
@@ -73,13 +338,16 @@ namespace VectorEditor
                             double minY = _polygonPoints.Min(p => p.Y);
                             var relative = new PointCollection(_polygonPoints.Select(p => new Point(p.X - minX, p.Y - minY)));
 
+                            var fillPoly = ViewModel?.SelectedColor?.Brush ?? Brushes.LightYellow;
+                            var strokePoly = ViewModel?.SelectedStrokeColor?.Brush ?? Brushes.Black;
+
                             var polyModel = new ShapeModel
                             {
                                 X = minX,
                                 Y = minY,
                                 Points = relative,
-                                Fill = Brushes.LightYellow,
-                                Stroke = Brushes.Black,
+                                Fill = fillPoly,
+                                Stroke = strokePoly,
                                 Type = ShapeType.Polygon
                             };
 
@@ -165,6 +433,31 @@ namespace VectorEditor
             RemovePolygonPreview();
         }
 
+        private void Window_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Delete)
+            {
+                if (ViewModel?.RemoveSelectedCommand != null && ViewModel.RemoveSelectedCommand.CanExecute(null))
+                {
+                    ViewModel.RemoveSelectedCommand.Execute(null);
+                    e.Handled = true;
+                }
+            }
+        }
+
+        private void Window_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                if (ViewModel != null)
+                {
+                    double delta = e.Delta > 0 ? 0.1 : -0.1;
+                    ViewModel.Zoom = Math.Round(Math.Max(0.2, Math.Min(5.0, ViewModel.Zoom + delta)), 2);
+                    e.Handled = true;
+                }
+            }
+        }
+
         // polygon preview helpers
         private void UpdatePolygonPreview(Point? mousePos)
         {
@@ -193,6 +486,11 @@ namespace VectorEditor
                 DrawingCanvas.Children.Remove(_previewPolyline);
                 _previewPolyline = null;
             }
+        }
+
+        private void Button_Click(object sender, RoutedEventArgs e)
+        {
+
         }
     }
 }
