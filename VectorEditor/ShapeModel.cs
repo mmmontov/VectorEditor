@@ -14,7 +14,6 @@ namespace VectorEditor
         public Brush Stroke { get; set; } = Brushes.Black;
         public ShapeType Type { get; set; } = ShapeType.Rectangle;
 
-        // [ИЗМЕНЕНО] PointCollection удобнее и привязывается к Polygon.Points
         public PointCollection Points { get; set; } = new PointCollection();
     }
 }

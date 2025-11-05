@@ -129,7 +129,7 @@ namespace VectorEditor
             OnPropertyChanged(nameof(EndY));
         }
 
-        // deep clone model (used by SaveState)
+        // копия для отката
         public ShapeModel CloneModel()
         {
             var copy = new ShapeModel
@@ -161,7 +161,7 @@ namespace VectorEditor
         }
     }
 
-    // Simple helper to show available colors in UI
+    // красиво отобразить список доступных цветов
     public class ColorItem
     {
         public string Name { get; }
@@ -174,11 +174,12 @@ namespace VectorEditor
         public override string ToString() => Name;
     }
 
+    // главный класс
     public class MainViewModel : INotifyPropertyChanged
     {
-        public ObservableCollection<ShapeViewModel> Shapes { get; private set; }
+        public ObservableCollection<ShapeViewModel> Shapes { get; private set; } // все фигуры на холсте
 
-        public ObservableCollection<ColorItem> Colors { get; } = new ObservableCollection<ColorItem>();
+        public ObservableCollection<ColorItem> Colors { get; } = new ObservableCollection<ColorItem>(); // палитра цветов
 
         private ColorItem _selectedColor;
         public ColorItem SelectedColor
@@ -334,15 +335,14 @@ namespace VectorEditor
             ResetZoomCommand = new RelayCommand(o => Zoom = 1.0);
         }
 
-        // NOTE: Do NOT clone here — AddShape simply adds the provided VM.
-        // SaveState should be called externally at the correct times (after finalization)
+        
         public void AddShape(ShapeViewModel shape)
         {
             if (shape == null) return;
             Shapes.Add(shape);
         }
 
-        // Save deep snapshot for undo
+        // сохранение состояния для отката
         public void SaveState()
         {
             var snapshot = new List<ShapeModel>();
