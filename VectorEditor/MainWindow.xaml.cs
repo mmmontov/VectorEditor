@@ -492,5 +492,18 @@ namespace VectorEditor
         {
 
         }
+
+        private void NumberOnly_PreviewTextInput(object sender, TextCompositionEventArgs e)
+        {
+            // Разрешаем только цифры и точку
+            e.Handled = !System.Text.RegularExpressions.Regex.IsMatch(e.Text, @"^[0-9.]$");
+        }
+
+        private void NumberOnly_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            // Запрещаем ввод минуса и других управляющих клавиш
+            if (e.Key == Key.Subtract || e.Key == Key.OemMinus)
+                e.Handled = true;
+        }
     }
 }

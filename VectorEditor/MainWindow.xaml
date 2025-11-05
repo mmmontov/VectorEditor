@@ -84,12 +84,12 @@
 
                                     <StackPanel Orientation="Horizontal" Margin="0,4,0,4">
                                         <TextBlock Text="Ширина:" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                        <TextBox Text="{Binding Width, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
+                                        <TextBox Text="{Binding Width, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" PreviewTextInput="NumberOnly_PreviewTextInput"/>
                                     </StackPanel>
 
                                     <StackPanel Orientation="Horizontal" Margin="0,4,0,4">
                                         <TextBlock Text="Высота:" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                        <TextBox Text="{Binding Height, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
+                                        <TextBox Text="{Binding Height, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" PreviewTextInput="NumberOnly_PreviewTextInput"/>
                                     </StackPanel>
 
                                     <StackPanel Orientation="Horizontal" Margin="0,4,0,4">
